@@ -6,6 +6,7 @@ tb_logger/*
 wandb/*
 tmp/*
 realesrgan/weights/*
+image_grabber/images/*
 
 version.py
 

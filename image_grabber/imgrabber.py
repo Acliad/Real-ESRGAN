@@ -5,7 +5,6 @@ import re
 import imghdr
 import logging
 import urllib.parse, urllib.error
-from bs4 import BeautifulSoup
 from requests.api import head
 
 GOOGLE_SEARCH_BASE_URL = "https://www.google.com/search"
@@ -69,9 +68,7 @@ class ImGrabber:
         payload_str = urllib.parse.urlencode(payload, safe=':,')
         r = requests.get(GOOGLE_SEARCH_BASE_URL, params=payload_str, headers=self.headers)
         self.search_url = r.url
-        soup = BeautifulSoup(r.text, 'lxml')
-        scripts = soup.select('script')
-        self.links = re.findall(URL_REGEX_PATTERN, str(scripts))
+        self.links = re.findall(URL_REGEX_PATTERN, str(r.text))
 
         return self.links.copy()
 
@@ -178,7 +175,7 @@ if __name__ == "__main__":
     NUM_SEARCH_WORDS  = 3
     NUM_FOLDERS       = 3
     IMAGES_PER_FOLDER = 10
-    RESUME            = True
+    RESUME            = False
 
     with open(NOUNS_PATH) as words_file:
         words = [word.strip() for word in words_file.readlines()]
@@ -202,8 +199,10 @@ if __name__ == "__main__":
         last_folder = folders_int[-1]
         print("Resuming from folder " + str(last_folder))
     else:
-        print("Emptying directory...")
-        shutil.rmtree(IMAGES_ROOT_PATH)
+        if os.path.exists(IMAGES_ROOT_PATH) and os.path.isdir(IMAGES_ROOT_PATH):
+            print("Emptying directory...")
+            shutil.rmtree(IMAGES_ROOT_PATH)
+        last_folder = 0
 
     for i in range(last_folder, NUM_FOLDERS):
         folder_path = IMAGES_ROOT_PATH + str(i)
