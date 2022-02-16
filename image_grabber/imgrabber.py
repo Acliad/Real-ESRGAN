@@ -182,22 +182,22 @@ class ImGrabber:
                 links=None,
                 prefix='',
                 suffix='',
-                zfill=0):
+                zfill=0,
+                n_infolder=0):
 
-        n_downloaded = 0
-        while n_downloaded < n:
+        while n_infolder < n:
             search_words = self.searchrdm(k, type=type)
             words_str = ' '.join(
                 search_words) if type == 'all' else ' OR '.join(search_words)
             self.logger.info("Search: " + words_str)
-            n_downloaded += self.download(
+            n_infolder += self.download(
                 destination,
                 links=links,
                 prefix=prefix,
                 suffix=suffix,
-                start=n_downloaded,
+                start=n_infolder,
                 zfill=zfill,
-                maximgs=(n - n_downloaded))
+                maximgs=(n - n_infolder))
 
 if __name__ == "__main__":
     import shutil
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     NUM_SEARCH_WORDS  = 3
     NUM_FOLDERS       = 3
     IMAGES_PER_FOLDER = 10
-    RESUME            = False
+    RESUME            = True
 
     with open(NOUNS_PATH) as words_file:
         words = [word.strip() for word in words_file.readlines()]
@@ -226,20 +226,39 @@ if __name__ == "__main__":
     l.addHandler(fileHandler)
     l.addHandler(streamHandler)
 
-    if RESUME:
-        folders = [d for d in IMAGES_ROOT_PATH.iterdir() if d.is_dir()]
+    if RESUME and IMAGES_ROOT_PATH.exists():
+        # TODO: This should be refactored. The main goal here is to find the
+        # the latest folder, then find the latest image, remove the most recent
+        # image, and start the search by re-downloading the just removed image.
+        # Right now, it will fail if the filenames don't have leading 0s and
+        # probably in other cases too.
+        folders = [d.stem for d in IMAGES_ROOT_PATH.iterdir() if d.is_dir()]
         folders_int = [int(x) for x in folders]
         folders_int.sort()
         last_folder = folders_int[-1]
-        print("Resuming from folder " + str(last_folder))
+        images_path = pathlib.Path(IMAGES_ROOT_PATH / str(last_folder))
+        images = [im.name for im in images_path.iterdir() if not im.is_dir()]
+        images.sort()
+        last_image = images[-1]
+        print(IMAGES_ROOT_PATH)
+        (IMAGES_ROOT_PATH / str(last_folder) / str(last_image)).unlink()
+        print("Resuming from folder " + str(last_folder) +
+              " picture " + str(last_image))
+        last_image = int(pathlib.Path(last_image).stem)
     else:
         if IMAGES_ROOT_PATH.exists() and IMAGES_ROOT_PATH.is_dir():
             print("Emptying directory...")
             shutil.rmtree(IMAGES_ROOT_PATH)
         last_folder = 0
+        last_image = 0
 
+    print(last_image)
     for i in range(last_folder, NUM_FOLDERS):
         folder_path = IMAGES_ROOT_PATH / str(i)
         folder_path.mkdir(parents=True, exist_ok=True)
         crawler.grabrdm(
-            folder_path, IMAGES_PER_FOLDER, NUM_SEARCH_WORDS, zfill=5)
+            folder_path,
+            IMAGES_PER_FOLDER,
+            NUM_SEARCH_WORDS,
+            zfill=5,
+            n_infolder=last_image)
