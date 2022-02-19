@@ -111,7 +111,8 @@ class ImGrabber:
                  suffix='',
                  start=0,
                  zfill=0,
-                 maximgs=100):
+                 maximgs=100,
+                 exclude_types=[]):
         """Download images to destination
 
         Args:
@@ -126,12 +127,17 @@ class ImGrabber:
                                    Defaults to 0.
             maximgs (int, optional): max number of images to download. Defaults
                                      to 100.
+            exclude_types (list, optional): list of image types (extensions) to
+                                      exlude from saving
 
         Returns:
             [type]: [description]
         """
         if links == None:
             links = self.links
+
+        # Remove the '.' from file extensions if given
+        exclude_types = [ext.strip('.') for ext in exclude_types]
 
         i = 0
         for link in links:
@@ -143,7 +149,7 @@ class ImGrabber:
                 r = requests.get(link, headers=self.headers, stream=True)
 
                 # Check status code and write file
-                if r.status_code == 200: # Success code
+                if r.status_code == 200:  # Success code
                     # Write image date to file
                     with open(img_path, 'wb') as img:
                         for chunk in r:
@@ -151,16 +157,21 @@ class ImGrabber:
 
                     # Check the image and add the file extension
                     img_type = imghdr.what(img_path)
-                    if img_type is not None:
-                        img_path = img_path.rename(
-                            img_path.with_suffix('.' + img_type))
-                        self.logger.debug("Saved " + str(img_path))
-                        i += 1
-                    else:
+                    if img_type is None:
                         self.logger.warning(
                             "Not a known image type (from {}\) skipping...".
                             format(link))
                         img_path.unlink()
+                    elif img_type in exclude_types:
+                        self.logger.info(
+                            "Skipping image with extension {}...".
+                            format(img_type))
+                        img_path.unlink()
+                    else:
+                        img_path = img_path.rename(
+                            img_path.with_suffix('.' + img_type))
+                        self.logger.debug("Saved " + str(img_path))
+                        i += 1
 
                 else:  # Got an error
                     self.logger.error("Got: HTTP Error " + str(r.status_code) +
@@ -183,7 +194,8 @@ class ImGrabber:
                 prefix='',
                 suffix='',
                 zfill=0,
-                n_infolder=0):
+                n_infolder=0,
+                exclude_types=[]):
 
         while n_infolder < n:
             search_words = self.searchrdm(k, type=type)
@@ -197,16 +209,18 @@ class ImGrabber:
                 suffix=suffix,
                 start=n_infolder,
                 zfill=zfill,
-                maximgs=(n - n_infolder))
+                maximgs=(n - n_infolder),
+                exclude_types=exclude_types)
 
 if __name__ == "__main__":
     import shutil
 
     NOUNS_PATH = pathlib.Path("./image_grabber/nounlist.txt")
-    IMAGES_ROOT_PATH = pathlib.Path("./image_grabber/images/")
+    IMAGES_ROOT_PATH = pathlib.Path("/mnt/datadrive/images/")
     NUM_SEARCH_WORDS  = 3
     NUM_FOLDERS       = 3
     IMAGES_PER_FOLDER = 10
+    EXLUDE_TYPES      = ['gif']
     RESUME            = True
 
     with open(NOUNS_PATH) as words_file:
@@ -238,13 +252,19 @@ if __name__ == "__main__":
         last_folder = folders_int[-1]
         images_path = pathlib.Path(IMAGES_ROOT_PATH / str(last_folder))
         images = [im.name for im in images_path.iterdir() if not im.is_dir()]
-        images.sort()
-        last_image = images[-1]
-        print(IMAGES_ROOT_PATH)
-        (IMAGES_ROOT_PATH / str(last_folder) / str(last_image)).unlink()
+        if len(images) == 0:
+            last_image = 0
+        else:
+            images.sort()
+            last_image = images[-1]
+            print(IMAGES_ROOT_PATH)
+            # Delete the most recent image to redownload (in case it's corrupted)
+            (IMAGES_ROOT_PATH / str(last_folder) / str(last_image)).unlink()
+            last_image = int(pathlib.Path(last_image).stem)
+
         print("Resuming from folder " + str(last_folder) +
               " picture " + str(last_image))
-        last_image = int(pathlib.Path(last_image).stem)
+
     else:
         if IMAGES_ROOT_PATH.exists() and IMAGES_ROOT_PATH.is_dir():
             print("Emptying directory...")
@@ -260,5 +280,7 @@ if __name__ == "__main__":
             folder_path,
             IMAGES_PER_FOLDER,
             NUM_SEARCH_WORDS,
-            zfill=5,
-            n_infolder=last_image)
+            zfill=7,
+            n_infolder=last_image,
+            exclude_types=EXLUDE_TYPES)
+        last_image = 0
